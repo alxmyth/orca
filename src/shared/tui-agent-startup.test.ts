@@ -177,6 +177,95 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("codex --profile work 'resume' 's1'")
   })
 
+  it('builds a Claude Agent Teams resume plan via `orca claude-teams`', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      launchKind: 'claude-agent-teams',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'darwin'
+    })
+
+    expect(plan?.launchCommand).toBe("orca claude-teams '--resume' 's1'")
+    expect(plan?.expectedProcess).toBe('claude')
+  })
+
+  it('uses the platform orca CLI name for the teams resume wrapper', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      launchKind: 'claude-agent-teams',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    // Linux invokes the bundled CLI under a distinct name (orca-ide).
+    expect(plan?.launchCommand).toBe("orca-ide claude-teams '--resume' 's1'")
+  })
+
+  it('does not apply the user claude command override or args to a teams resume', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      launchKind: 'claude-agent-teams',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: { claude: 'claude --dangerously-skip-permissions' },
+      agentArgs: '--model sonnet',
+      platform: 'darwin'
+    })
+
+    // The wrapper is `orca claude-teams`, not the claude binary, so the user's
+    // claude cmd-override / default args must never be spliced in front of it.
+    expect(plan?.launchCommand).toBe("orca claude-teams '--resume' 's1'")
+  })
+
+  it('resumes a plain claude leader (no marker) without the teams wrapper', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("claude '--resume' 's1'")
+  })
+
+  it('falls back to plain claude resume for a teams record on win32', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      launchKind: 'claude-agent-teams',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'win32'
+    })
+
+    // `orca claude-teams` is unsupported on win32; resume the real claude
+    // leader so the conversation returns instead of erroring to a bare shell.
+    expect(plan?.launchCommand).toBe("claude '--resume' 's1'")
+  })
+
+  it('rejects a teams session id that could inject a flag (leading dash)', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      launchKind: 'claude-agent-teams',
+      providerSession: { key: 'session_id', id: '--dangerously-skip-permissions' },
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toBeNull()
+  })
+
+  it('rejects a leading-dash session id on the plain resume path too', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: '-rf' },
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toBeNull()
+  })
+
   it('appends shell-quoted CLI arguments before prompt delivery flags', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',

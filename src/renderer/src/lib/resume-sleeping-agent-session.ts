@@ -52,6 +52,7 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
   const state = useAppStore.getState()
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
+    launchKind: record.launchKind,
     providerSession: record.providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     agentArgs: resolveTuiAgentLaunchArgs(record.agent, state.settings?.agentDefaultArgs),
@@ -69,7 +70,10 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
   }
 
   const tab = state.createTab(record.worktreeId, undefined, undefined, {
-    launchAgent: record.agent
+    // Why: teams records keep agent:'claude' but must restore under the teams
+    // logo and relaunch via `orca claude-teams`. A createTab pane carries
+    // ORCA_PANE_KEY just like a normal teams launch, so the wrapper runs.
+    launchAgent: record.launchKind ?? record.agent
   })
   state.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
@@ -84,6 +88,9 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
     }
   })
   state.clearSleepingAgentSession(record.paneKey)
+  // Why: deliberate single resume (sidebar / worktree activation) focuses the
+  // restored tab. Bulk app-launch cold restore does NOT come through here — it
+  // uses the pane-level cold-restore path, which never steals focus.
   state.setActiveTabType('terminal')
   appendTabToWorktreeOrder(record.worktreeId, tab.id)
   return true

@@ -111,6 +111,9 @@ const sleepingAgentSessionRecordSchema = z.object({
   terminalTitle: z.string().optional(),
   lastAssistantMessage: z.string().optional(),
   connectionId: z.string().nullable().optional(),
+  // Why: closed literal (never a free string) so it can never carry an
+  // un-preprocessed value into a command; older builds ignore the unknown key.
+  launchKind: z.literal('claude-agent-teams').optional(),
   origin: z.enum(['worktree-sleep', 'quit', 'live']).optional()
 })
 

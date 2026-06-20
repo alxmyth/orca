@@ -2046,6 +2046,10 @@ export function connectPanePty(
       }
       const startupPlan = buildAgentResumeStartupPlan({
         agent,
+        // Why: teams identity rides the persisted record, so teams-as-teams
+        // resume only applies on the cold (record) path; a live working teams
+        // leader resumes as plain claude (acceptable, the conversation returns).
+        launchKind: sleepingRecord?.launchKind,
         providerSession,
         cmdOverrides: state.settings?.agentCmdOverrides ?? {},
         agentArgs: resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),

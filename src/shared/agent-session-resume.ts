@@ -35,6 +35,12 @@ export type SleepingAgentSessionRecord = {
   terminalTitle?: string
   lastAssistantMessage?: string
   connectionId?: string | null
+  /** Marks a record whose pane is a Claude Agent Teams leader. Stored
+   *  separately from `agent` (which stays 'claude', the real leader process)
+   *  so older builds still parse the record — they ignore this field and
+   *  resume the leader as plain `claude`. When set, resume rebuilds the team
+   *  via `orca claude-teams --resume <id>`. */
+  launchKind?: 'claude-agent-teams'
   /** How the record was captured. Worktree-sleep records (legacy records have
    *  no origin) are consumed by worktree activation, which opens a fresh tab.
    *  Quit/live records describe panes that still exist in the restored session,

@@ -299,6 +299,12 @@ function sleepingRecordFromEntry(args: {
     ...(args.entry.lastAssistantMessage
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
       : {}),
+    // Why: a Claude Agent Teams leader is a real `claude` process (agent stays
+    // 'claude'); this marker lets cold restore rebuild it via `orca
+    // claude-teams --resume` instead of plain `claude --resume`.
+    ...(tab?.launchAgent === 'claude-agent-teams'
+      ? { launchKind: 'claude-agent-teams' as const }
+      : {}),
     ...(args.origin ? { origin: args.origin } : {})
   }
 }

@@ -107,6 +107,26 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
+  it('resumes a teams record via `claude-teams` under the teams logo', () => {
+    const record = makeRecord({ origin: 'worktree-sleep', launchKind: 'claude-agent-teams' })
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(1)
+    const state = useAppStore.getState()
+    const resumedTab = state.tabsByWorktree['wt-1']?.[0]
+    // Teams records keep agent:'claude' but restore under the teams logo and
+    // relaunch via the orca claude-teams wrapper (CLI name varies by platform).
+    expect(resumedTab?.launchAgent).toBe('claude-agent-teams')
+    const command = state.pendingStartupByTabId[resumedTab!.id]?.command
+    expect(command).toContain('claude-teams')
+    expect(command).toContain("'--resume' 'sess-1'")
+  })
+
   it('uses WSL resume quoting for Windows-path projects forced to WSL', () => {
     const record = makeRecord({
       providerSession: { key: 'session_id', id: "sess-1's" },

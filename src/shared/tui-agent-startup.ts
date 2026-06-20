@@ -1,6 +1,7 @@
 import { isShellProcess } from './agent-detection'
 import {
   getAgentResumeArgv,
+  normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,
   type ResumableTuiAgent
 } from './agent-session-resume'
@@ -201,32 +202,56 @@ export function buildAgentResumeStartupPlan(args: {
   shell?: AgentStartupShell
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
+  /** Set when the resumed pane is a Claude Agent Teams leader. */
+  launchKind?: 'claude-agent-teams'
 }): AgentStartupPlan | null {
-  const argv = getAgentResumeArgv(args.agent, args.providerSession)
-  if (!argv) {
+  // Why: one normalization chokepoint for every resume path — rejects a leading
+  // '-' / control chars so a tampered session id can't inject a flag into argv.
+  const providerSession = normalizeAgentProviderSession(args.providerSession)
+  if (!providerSession) {
     return null
   }
   const shell = resolveStartupShell(args.platform, args.shell)
-  const config = TUI_AGENT_CONFIG[args.agent]
-  const baseCommand = resolveBaseCommand({
-    agent: args.agent,
-    cmdOverrides: args.cmdOverrides,
-    platform: args.platform,
-    shell,
-    agentArgs: args.agentArgs
-  })
-  if (!baseCommand.ok) {
-    return null
+
+  // Why: a teams leader launches via `orca claude-teams`, not the claude binary,
+  // so it bypasses resolveBaseCommand/overrides; win32 falls back to plain claude.
+  const useTeamsWrapper =
+    args.launchKind === 'claude-agent-teams' &&
+    args.platform !== 'win32' &&
+    providerSession.key === 'session_id'
+
+  let launchCommand: string
+  let expectedProcess: string
+  if (useTeamsWrapper) {
+    const teamsConfig = TUI_AGENT_CONFIG['claude-agent-teams']
+    const quotedResume = ['--resume', providerSession.id]
+      .map((arg) => quoteStartupArg(arg, shell))
+      .join(' ')
+    launchCommand = `${getTuiAgentLaunchCommand(teamsConfig, args.platform)} ${quotedResume}`
+    expectedProcess = teamsConfig.expectedProcess
+  } else {
+    const argv = getAgentResumeArgv(args.agent, providerSession)
+    const baseCommand = resolveBaseCommand({
+      agent: args.agent,
+      cmdOverrides: args.cmdOverrides,
+      platform: args.platform,
+      shell,
+      agentArgs: args.agentArgs
+    })
+    if (!argv || !baseCommand.ok) {
+      return null
+    }
+    const resumeArgs = argv
+      .slice(1)
+      .map((arg) => quoteStartupArg(arg, shell))
+      .join(' ')
+    launchCommand = resumeArgs ? `${baseCommand.command} ${resumeArgs}` : baseCommand.command
+    expectedProcess = TUI_AGENT_CONFIG[args.agent].expectedProcess
   }
-  const resumeArgs = argv
-    .slice(1)
-    .map((arg) => quoteStartupArg(arg, shell))
-    .join(' ')
-  const launchCommand = resumeArgs ? `${baseCommand.command} ${resumeArgs}` : baseCommand.command
   return {
     agent: args.agent,
     launchCommand,
-    expectedProcess: config.expectedProcess,
+    expectedProcess,
     followupPrompt: null,
     ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
   }
