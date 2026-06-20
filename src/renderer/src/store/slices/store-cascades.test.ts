@@ -2809,7 +2809,9 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
 
     const state = store.getState()
     expect(state.ptyIdsByTabId['tab-1']).toEqual(['pty-agent', 'pty-shell'])
-    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeUndefined()
+    // Idle ('done') agents keep a live resume checkpoint (Layer A); a failed
+    // sleep must roll back without committing a sleep record over it.
+    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]?.origin).toBe('live')
     expect(state.agentStatusByPaneKey[targetPaneKey]).toBeDefined()
     expect(state.suppressedPtyExitIds['pty-agent']).toBeUndefined()
     expect(mockRestorePtyDataHandlersAfterFailedShutdown).toHaveBeenCalledWith(handlerSnapshots)
@@ -3100,7 +3102,9 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     ])
     expect(state.suppressedPtyExitIds['remote:env-1@@terminal-1']).toBeUndefined()
     expect(state.suppressedPtyExitIds['terminal-1']).toBeUndefined()
-    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeUndefined()
+    // Idle ('done') agents keep a live resume checkpoint (Layer A); a failed
+    // sleep must roll back without committing a sleep record over it.
+    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]?.origin).toBe('live')
     expect(state.agentStatusByPaneKey[targetPaneKey]).toBeDefined()
   })
 
@@ -3345,7 +3349,9 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('terminal_liveness_unavailable')
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    // Idle ('done') agents keep a live resume checkpoint (Layer A); the failed
+    // stop must roll back without committing a sleep record over it.
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']?.origin).toBe('live')
     expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
     expect(store.getState().suppressedPtyExitIds['pty-1']).toBeUndefined()
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
@@ -3399,7 +3405,9 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('exact_terminal_stop_unverified')
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    // Idle ('done') agents keep a live resume checkpoint (Layer A); the failed
+    // stop must roll back without committing a sleep record over it.
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']?.origin).toBe('live')
     expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
     expect(store.getState().suppressedPtyExitIds['pty-1']).toBeUndefined()
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
@@ -3787,7 +3795,9 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('stop failed')
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    // Idle ('done') agents keep a live resume checkpoint (Layer A); the failed
+    // stop must roll back without committing a sleep record over it.
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']?.origin).toBe('live')
     expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
     expect(mockUnregisterPtyDataHandlers).not.toHaveBeenCalledWith(['pty-1'])
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
