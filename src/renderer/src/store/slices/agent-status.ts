@@ -390,6 +390,11 @@ function recoveryRecordMatches(
   existing: SleepingAgentSessionRecord | undefined,
   next: SleepingAgentSessionRecord
 ): boolean {
+  // Why: identity match only (origin/agent/worktree/tab/providerSession).
+  // `state` and `prompt` are intentionally excluded so a working->done
+  // transition on a now-retained record does not rewrite and re-persist it on
+  // every status ping. The cold-restore consumer keys on agent+providerSession,
+  // not on the record's `state`, so a slightly stale `state` is harmless.
   if (!existing) {
     return false
   }
@@ -741,10 +746,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           (entry) => entry.paneKey === paneKey
         )
         const existingSleepingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
-        const liveRecoveryWorktreeId =
-          entry.state === 'done'
-            ? null
-            : (entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey))
+        // Why: retain the resume record even when the agent is idle ('done').
+        // A finished Claude/Codex/etc. turn is still resumable, so an idle
+        // agent must survive a cold restart (daemon death) instead of
+        // cold-restoring to a bare shell under a stale logo. Non-resumable /
+        // no-providerSession entries still yield null in sleepingRecordFromEntry
+        // and fall through to the delete branch below.
+        const liveRecoveryWorktreeId = entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey)
         const liveRecoveryRecord = liveRecoveryWorktreeId
           ? sleepingRecordFromEntry({
               state: s,
@@ -1378,11 +1386,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     },
 
     captureAllSleepingAgentSessions: () => {
-      // Why: the quit flush must persist provider session ids for every live
-      // agent pane — otherwise agents whose daemon PTYs die while the app is
-      // closed have nothing to `--resume` from (#5232). Only live entries are
-      // captured: retained rows belong to panes the user already closed, and
-      // `done` sessions have nothing to resume.
+      // Why: the quit flush must persist provider session ids for every agent
+      // pane — otherwise agents whose daemon PTYs die while the app is closed
+      // have nothing to `--resume` from (#5232). Idle ('done') agents are
+      // captured too: a finished Claude/Codex/etc. session is still resumable,
+      // and skipping them is what left idle agents cold-restoring to a bare
+      // shell under a stale logo. Non-resumable / no-providerSession entries
+      // are dropped by sleepingRecordFromEntry below; rows for already-closed
+      // panes are pruned on pane/worktree removal.
       set((s) => {
         const capturedAt = Date.now()
         const next: Record<string, SleepingAgentSessionRecord> = {
@@ -1390,9 +1401,6 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         }
         let changed = false
         for (const entry of Object.values(s.agentStatusByPaneKey)) {
-          if (entry.state === 'done') {
-            continue
-          }
           const worktreeId = entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey)
           if (!worktreeId) {
             continue

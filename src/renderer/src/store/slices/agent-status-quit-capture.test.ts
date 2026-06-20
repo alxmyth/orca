@@ -94,7 +94,7 @@ describe('captureAllSleepingAgentSessions', () => {
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(firstRecord)
   })
 
-  it('clears the live checkpoint when the agent finishes', () => {
+  it('retains the live checkpoint when a resumable agent finishes (idle is resumable)', () => {
     const store = createTestStore()
     store.setState({
       tabsByWorktree: {
@@ -127,7 +127,45 @@ describe('captureAllSleepingAgentSessions', () => {
       { providerSession: { key: 'session_id', id: 'codex-session-1' } }
     )
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBeUndefined()
+    // Why: a finished agent's provider session is still resumable, so the
+    // record must survive going idle (otherwise a cold restart bare-shells it).
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      providerSession: { key: 'session_id', id: 'codex-session-1' }
+    })
+  })
+
+  it('does not churn the retained record reference on a working->done transition', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+
+    const tick = (state: 'working' | 'done', updatedAt: number): void => {
+      store
+        .getState()
+        .setAgentStatus(
+          'tab-1:leaf-1',
+          { state, prompt: 'do the task', agentType: 'codex' },
+          'Codex',
+          { updatedAt, stateStartedAt: 10 },
+          { tabId: 'tab-1', worktreeId: 'wt-1' },
+          { providerSession: { key: 'session_id', id: 'codex-session-1' } }
+        )
+    }
+
+    tick('working', 10)
+    const before = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
+    tick('done', 20)
+    const after = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
+
+    // recoveryRecordMatches ignores `state`, so going idle keeps the same record
+    // reference rather than re-writing (and re-persisting) it every status ping.
+    expect(after).toBe(before)
   })
 
   it('captures resumable agents across every worktree, not just one', () => {
@@ -170,7 +208,7 @@ describe('captureAllSleepingAgentSessions', () => {
     })
   })
 
-  it('skips done agents — there is no turn left to resume', () => {
+  it('captures a done resumable agent at quit (a finished session is still resumable)', () => {
     const store = createTestStore()
     const entry = makeAgentEntry({
       paneKey: 'tab-1:leaf-1',
@@ -187,7 +225,77 @@ describe('captureAllSleepingAgentSessions', () => {
 
     store.getState().captureAllSleepingAgentSessions()
 
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      worktreeId: 'wt-1',
+      providerSession: { key: 'session_id', id: 'sess-1' },
+      origin: 'quit'
+    })
+  })
+
+  it('does not capture a done pane without a providerSession', () => {
+    const store = createTestStore()
+    const entry = makeAgentEntry({ paneKey: 'tab-1:leaf-1', worktreeId: 'wt-1' })
+    entry.state = 'done'
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      },
+      agentStatusByPaneKey: { 'tab-1:leaf-1': entry }
+    } as Partial<AppState>)
+
+    store.getState().captureAllSleepingAgentSessions()
+
+    // Safety basis for capturing done agents: no provider session => nothing to
+    // resume => no record, so the pane is never resurrected as a bare shell.
     expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({})
+  })
+
+  it('does not capture a done pane whose agentType is not resumable', () => {
+    const store = createTestStore()
+    const entry = makeAgentEntry({
+      paneKey: 'tab-1:leaf-1',
+      worktreeId: 'wt-1',
+      sessionId: 'sess-1'
+    })
+    entry.state = 'done'
+    entry.agentType = 'amp'
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      },
+      agentStatusByPaneKey: { 'tab-1:leaf-1': entry }
+    } as Partial<AppState>)
+
+    store.getState().captureAllSleepingAgentSessions()
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({})
+  })
+
+  it('captures every idle (done) resumable pane across worktrees', () => {
+    const store = createTestStore()
+    const e1 = makeAgentEntry({ paneKey: 'tab-1:leaf-1', worktreeId: 'wt-1', sessionId: 'sess-1' })
+    const e2 = makeAgentEntry({ paneKey: 'tab-2:leaf-2', worktreeId: 'wt-2', sessionId: 'sess-2' })
+    e1.state = 'done'
+    e2.state = 'done'
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })],
+        'wt-2': [makeTab({ id: 'tab-2', worktreeId: 'wt-2' })]
+      },
+      agentStatusByPaneKey: { 'tab-1:leaf-1': e1, 'tab-2:leaf-2': e2 }
+    } as Partial<AppState>)
+
+    store.getState().captureAllSleepingAgentSessions()
+
+    const records = store.getState().sleepingAgentSessionsByPaneKey
+    expect(records['tab-1:leaf-1']).toMatchObject({
+      origin: 'quit',
+      providerSession: { key: 'session_id', id: 'sess-1' }
+    })
+    expect(records['tab-2:leaf-2']).toMatchObject({
+      origin: 'quit',
+      providerSession: { key: 'session_id', id: 'sess-2' }
+    })
   })
 
   it('skips agents without a resumable provider session', () => {
