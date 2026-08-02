@@ -84,6 +84,7 @@ export function launchSleepingAgentSession(
     ...(launchConfig?.ompResumeFilePath
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
+    ...(record.launchKind ? { launchKind: record.launchKind } : {}),
     platform: getResumeLaunchPlatform(record.worktreeId)
   })
   if (!startupPlan) {
@@ -97,7 +98,9 @@ export function launchSleepingAgentSession(
   }
 
   const tab = state.createTab(record.worktreeId, undefined, undefined, {
-    launchAgent: record.agent,
+    // Why: teams records keep agent:'claude' but must restore under the teams logo so the
+    // pane carries ORCA_PANE_KEY and the `orca claude-teams` wrapper runs.
+    launchAgent: record.launchKind ?? record.agent,
     ...(options?.suppressNavigation ? { activate: false, recordInteraction: false } : {})
   })
   state.queueTabStartupCommand(tab.id, {

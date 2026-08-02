@@ -621,6 +621,68 @@ describe('tui agent startup plans', () => {
     })
   })
 
+  it('rebuilds a Claude Agent Teams leader through the orca claude-teams wrapper', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      launchKind: 'claude-agent-teams',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'darwin'
+    })
+
+    expect(plan?.launchCommand).toBe("orca claude-teams '--resume' 's1'")
+    expect(plan?.expectedProcess).toBe('claude')
+    expect(plan?.agent).toBe('claude')
+  })
+
+  it('uses the platform orca CLI name for the teams resume wrapper', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      launchKind: 'claude-agent-teams',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("orca-ide claude-teams '--resume' 's1'")
+  })
+
+  it('falls back to plain claude resume for teams records on win32', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      launchKind: 'claude-agent-teams',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'win32'
+    })
+
+    expect(plan?.launchCommand).toBe("claude '--resume' 's1'")
+  })
+
+  it('does not let a claude command override leak into the teams wrapper', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      launchKind: 'claude-agent-teams',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: { claude: 'claude --dangerously-skip-permissions' },
+      agentCommand: 'claude --captured',
+      platform: 'darwin'
+    })
+
+    expect(plan?.launchCommand).toBe("orca claude-teams '--resume' 's1'")
+  })
+
+  it('resumes a plain claude record unchanged when no teams marker is present', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'darwin'
+    })
+
+    expect(plan?.launchCommand).toBe("claude '--resume' 's1'")
+  })
+
   it('keeps an AI Vault OMP file locator separate from provider identity', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'omp',

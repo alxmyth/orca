@@ -558,6 +558,10 @@ function sleepingRecordFromEntry(args: {
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
       : {}),
     ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
+    // Why: a teams leader is a real `claude` process, so `agent` alone loses the team on resume.
+    ...(tab?.launchAgent === 'claude-agent-teams'
+      ? { launchKind: 'claude-agent-teams' as const }
+      : {}),
     ...(args.entry.interrupted ? { interrupted: true } : {}),
     ...(args.origin ? { origin: args.origin } : {})
   }

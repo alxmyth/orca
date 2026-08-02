@@ -97,6 +97,8 @@ const sleepingAgentSessionRecordSchema = z
     interrupted: z.boolean().optional(),
     connectionId: z.string().nullable().optional(),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
+    // Why: closed literal so a persisted record can never carry a free string into a command.
+    launchKind: z.literal('claude-agent-teams').optional(),
     origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
     automaticResumeBlockedBy: z.enum(['legacy-orchestration-worker']).optional()
   })

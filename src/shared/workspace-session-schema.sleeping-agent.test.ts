@@ -329,6 +329,67 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it('preserves the Agent Teams launch marker across hydration', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'claude-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9,
+          launchKind: 'claude-agent-teams'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.launchKind).toBe(
+        'claude-agent-teams'
+      )
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.agent).toBe('claude')
+    }
+  })
+
+  it('drops an unknown launch marker without dropping the record', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'claude-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9,
+          launchKind: 'rm -rf /'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']).toBeUndefined()
+    }
+  })
+
   it('preserves interrupted sleeping agent records across hydration', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

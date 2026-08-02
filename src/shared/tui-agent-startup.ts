@@ -20,6 +20,7 @@ import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './types'
 import type { SessionOptionValue } from './native-chat-session-options'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
+import { resolveAgentResumeLaunchTarget } from './agent-resume-launch-target'
 
 export type AgentStartupPlan = {
   agent: TuiAgent
@@ -197,24 +198,24 @@ export function buildAgentResumeStartupPlan(args: {
   sessionOptions?: Record<string, SessionOptionValue>
   /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
   isRemote?: boolean
+  /** Set when the resumed pane was a Claude Agent Teams leader. */
+  launchKind?: 'claude-agent-teams'
 }): AgentStartupPlan | null {
   const argv = getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
   if (!argv) {
     return null
   }
   const shell = resolveStartupShell(args.platform, args.shell)
-  const config = TUI_AGENT_CONFIG[args.agent]
-  const resolvedAgentCommand = args.agentCommand?.trim()
-  const baseCommand = resolvedAgentCommand
-    ? ({ ok: true, command: resolvedAgentCommand } as const)
-    : resolveAgentLaunchCommand({
-        agent: args.agent,
-        cmdOverrides: args.cmdOverrides,
-        platform: args.platform,
-        shell,
-        agentArgs: args.agentArgs,
-        isRemote: args.isRemote
-      })
+  const { baseCommand, expectedProcess } = resolveAgentResumeLaunchTarget({
+    agent: args.agent,
+    ...(args.launchKind ? { launchKind: args.launchKind } : {}),
+    agentCommand: args.agentCommand,
+    cmdOverrides: args.cmdOverrides,
+    platform: args.platform,
+    shell,
+    agentArgs: args.agentArgs,
+    isRemote: args.isRemote
+  })
   if (!baseCommand.ok) {
     return null
   }
@@ -230,7 +231,7 @@ export function buildAgentResumeStartupPlan(args: {
   return {
     agent: args.agent,
     launchCommand,
-    expectedProcess: config.expectedProcess,
+    expectedProcess,
     followupPrompt: null,
     launchConfig,
     ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})

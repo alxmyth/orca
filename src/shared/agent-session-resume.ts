@@ -54,6 +54,10 @@ export type SleepingAgentSessionRecord = {
   interrupted?: boolean
   connectionId?: string | null
   launchConfig?: SleepingAgentLaunchConfig
+  /** Marks a pane that was a Claude Agent Teams leader. Kept separate from
+   *  `agent` (which stays 'claude', the real leader process) so older builds
+   *  ignore it and still resume the leader as plain claude. */
+  launchKind?: 'claude-agent-teams'
   /** How the record was captured. Worktree-sleep records (legacy records have
    *  no origin) are consumed by worktree activation, which opens a fresh tab.
    *  Quit/live records describe panes that still exist in the restored session,

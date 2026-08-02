@@ -4897,6 +4897,11 @@ export function connectPanePty(
       const startupPlan = buildAgentResumeStartupPlan({
         agent,
         providerSession,
+        // Why: teams identity rides the persisted record, so teams-as-teams resume applies
+        // only on the cold path; a live leader resumes as plain claude.
+        ...(!useLiveEntry && sleepingRecord?.launchKind
+          ? { launchKind: sleepingRecord.launchKind }
+          : {}),
         cmdOverrides: state.settings?.agentCmdOverrides ?? {},
         agentArgs:
           launchConfig !== undefined
