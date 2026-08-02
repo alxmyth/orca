@@ -94,6 +94,7 @@ export async function runMainPressureScenario<
   deps,
   maxMedianKeyLatencyMs,
   maxScrollLatencyMs,
+  maxScrollTimerDriftMs,
   maxTimerDriftMs,
   maxWorstKeyLatencyMs,
   pressureOutputChars,
@@ -106,6 +107,7 @@ export async function runMainPressureScenario<
   deps: MainPressureDeps<TMeasurement, TDebug, TScheduler, TMainPressure, TAckGate>
   maxMedianKeyLatencyMs: number
   maxScrollLatencyMs: number
+  maxScrollTimerDriftMs: number
   maxTimerDriftMs: number
   maxWorstKeyLatencyMs: number
   pressureOutputChars: number
@@ -143,7 +145,7 @@ export async function runMainPressureScenario<
       annotationSuffix,
       deps,
       maxScrollLatencyMs,
-      maxTimerDriftMs,
+      maxTimerDriftMs: maxScrollTimerDriftMs,
       orcaPage,
       panes,
       testInfo

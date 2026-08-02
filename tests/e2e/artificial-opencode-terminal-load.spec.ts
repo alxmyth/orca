@@ -171,6 +171,11 @@ function readPositiveIntList(name: string): number[] {
     })
 }
 
+// A single software-render/GC outlier during the seeded-scrollback scroll can
+// spike the renderer timer-drift watcher; relax the scroll gate on contended
+// shards without loosening the separate typing gate.
+const MAX_SCROLL_TIMER_DRIFT_MS = readPositiveInt('MAX_SCROLL_TIMER_DRIFT_MS', MAX_TIMER_DRIFT_MS)
+
 const SAME_WORKSPACE_PANES = readPositiveInt(
   'ORCA_E2E_OPENCODE_SAME_WORKSPACE_PANES',
   DEFAULT_SAME_WORKSPACE_PANES
@@ -483,6 +488,7 @@ async function runConfiguredMainPressureScenario({
     testRepoPath,
     maxMedianKeyLatencyMs: MAX_MEDIAN_KEY_LATENCY_MS,
     maxScrollLatencyMs: MAX_SCROLL_LATENCY_MS,
+    maxScrollTimerDriftMs: MAX_SCROLL_TIMER_DRIFT_MS,
     maxTimerDriftMs: MAX_TIMER_DRIFT_MS,
     maxWorstKeyLatencyMs: MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS,
     deps: terminalLoadScenarioDeps
