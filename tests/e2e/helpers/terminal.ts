@@ -53,6 +53,44 @@ export async function focusActiveTerminalInput(page: Page): Promise<void> {
   })
 }
 
+// Why: under xvfb software rendering a single focus() call does not reliably
+// make the active pane's helper textarea the document.activeElement before the
+// next synthetic keypress, so the window-level chord handler's scope guard
+// (keyboardEventBelongsToScope) misses and destructive chords like Cmd+W fall
+// through to the tab-level handler. Re-focus and poll until focus actually
+// lands before pressing a chord.
+export async function waitForActiveTerminalFocused(page: Page, timeoutMs = 5_000): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const state = window.__store?.getState()
+          const worktreeId = state?.activeWorktreeId
+          const tabId =
+            state?.activeTabType === 'terminal'
+              ? state.activeTabId
+              : worktreeId
+                ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+                : null
+          const manager = tabId ? window.__paneManagers?.get(tabId) : null
+          const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+          const textarea = pane?.container.querySelector(
+            '.xterm-helper-textarea'
+          ) as HTMLTextAreaElement | null
+          if (!textarea) {
+            return false
+          }
+          textarea.focus()
+          return document.activeElement === textarea
+        }),
+      {
+        timeout: timeoutMs,
+        message: 'Active terminal helper textarea never became document.activeElement'
+      }
+    )
+    .toBe(true)
+}
+
 // Why: worktree restoration can render the terminal surface before the legacy
 // global activeTabId settles. Prefer the active worktree's saved terminal tab
 // pointer, then fall back to the first terminal tab.

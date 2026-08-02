@@ -26,7 +26,8 @@ import {
   waitForPaneCount,
   getTerminalContent,
   waitForActivePanePtyId,
-  focusActiveTerminalInput
+  focusActiveTerminalInput,
+  waitForActiveTerminalFocused
 } from './helpers/terminal'
 import { waitForSessionReady, waitForActiveWorktree, ensureTerminalVisible } from './helpers/store'
 import {
@@ -394,6 +395,7 @@ async function pressAndExpectWrite(
 ): Promise<void> {
   await clearPtyWriteLog(app)
   await focusActiveTerminalInput(page)
+  await waitForActiveTerminalFocused(page)
   for (let index = 0; index < repetitions; index++) {
     await page.keyboard.press(chord)
   }
@@ -426,6 +428,7 @@ async function closeActivePaneAndSettle(page: Page, expectedCount: number): Prom
   // Why: split panes own multiple textareas; the shared helper focuses the
   // PaneManager's active terminal instead of whichever appears first in the DOM.
   await focusActiveTerminalInput(page)
+  await waitForActiveTerminalFocused(page)
   await page.keyboard.press(`${mod}+w`)
   // The "Stop running command?" confirm surfaces a "Stop and Close" action when
   // the pane still reports a running child.
@@ -761,6 +764,7 @@ test.describe('Terminal Shortcuts', () => {
 
     // Cmd/Ctrl+K clears the pane.
     await focusActiveTerminalInput(orcaPage)
+    await waitForActiveTerminalFocused(orcaPage)
     await orcaPage.keyboard.press(`${mod}+k`)
     await expect
       .poll(async () => (await getTerminalContent(orcaPage)).includes(marker), {
@@ -772,6 +776,7 @@ test.describe('Terminal Shortcuts', () => {
     // Split vertically (chord varies by platform — see splitVerticalChord).
     const panesBeforeSplit = await countVisibleTerminalPanes(orcaPage)
     await focusActiveTerminalInput(orcaPage)
+    await waitForActiveTerminalFocused(orcaPage)
     await orcaPage.keyboard.press(splitVerticalChord)
     await waitForPaneCount(orcaPage, panesBeforeSplit + 1)
     // Why: ensure the new split pane's PTY is actually bound before we later
@@ -780,8 +785,10 @@ test.describe('Terminal Shortcuts', () => {
 
     // Cmd/Ctrl+] and Cmd/Ctrl+[ cycle focus (no pane-count change).
     await focusActiveTerminalInput(orcaPage)
+    await waitForActiveTerminalFocused(orcaPage)
     await orcaPage.keyboard.press(`${mod}+BracketRight`)
     await focusActiveTerminalInput(orcaPage)
+    await waitForActiveTerminalFocused(orcaPage)
     await orcaPage.keyboard.press(`${mod}+BracketLeft`)
     expect(await countVisibleTerminalPanes(orcaPage)).toBe(panesBeforeSplit + 1)
 
@@ -798,11 +805,13 @@ test.describe('Terminal Shortcuts', () => {
       })
     expect(await readExpanded()).toBe(false)
     await focusActiveTerminalInput(orcaPage)
+    await waitForActiveTerminalFocused(orcaPage)
     await orcaPage.keyboard.press(`${mod}+Shift+Enter`)
     await expect
       .poll(readExpanded, { timeout: 3_000, message: 'Cmd+Shift+Enter did not expand pane' })
       .toBe(true)
     await focusActiveTerminalInput(orcaPage)
+    await waitForActiveTerminalFocused(orcaPage)
     await orcaPage.keyboard.press(`${mod}+Shift+Enter`)
     await expect
       .poll(readExpanded, { timeout: 3_000, message: 'Cmd+Shift+Enter did not collapse pane' })
@@ -814,6 +823,7 @@ test.describe('Terminal Shortcuts', () => {
     // Split horizontally (chord varies by platform — see splitHorizontalChord).
     const panesBeforeHSplit = await countVisibleTerminalPanes(orcaPage)
     await focusActiveTerminalInput(orcaPage)
+    await waitForActiveTerminalFocused(orcaPage)
     await orcaPage.keyboard.press(splitHorizontalChord)
     await waitForPaneCount(orcaPage, panesBeforeHSplit + 1)
     await waitForActivePanePtyId(orcaPage)
@@ -821,6 +831,7 @@ test.describe('Terminal Shortcuts', () => {
 
     // Cmd/Ctrl+F toggles the search overlay.
     await focusActiveTerminalInput(orcaPage)
+    await waitForActiveTerminalFocused(orcaPage)
     await orcaPage.keyboard.press(`${mod}+f`)
     const searchInput = orcaPage.locator('[data-terminal-search-root] input').first()
     // Why: Escape is handled by TerminalSearch's React onKeyDown, which only
