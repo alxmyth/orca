@@ -395,6 +395,85 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it('preserves an Agent Teams launch marker across hydration', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: '11111111-2222-4333-8444-555555555555' },
+          prompt: 'continue',
+          state: 'done',
+          capturedAt: 10,
+          updatedAt: 9,
+          launchKind: 'claude-agent-teams',
+          origin: 'quit'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.launchKind).toBe(
+        'claude-agent-teams'
+      )
+    }
+  })
+
+  it('drops a record with an unknown launch marker without dropping valid siblings', () => {
+    // Why: the marker is a closed literal so a malformed value can never reach a
+    // launch command; salvage keeps the rest of the workspace intact.
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: '11111111-2222-4333-8444-555555555555' },
+          prompt: 'continue',
+          state: 'done',
+          capturedAt: 10,
+          updatedAt: 9,
+          launchKind: '; rm -rf /',
+          origin: 'quit'
+        },
+        'tab1:pane-2': {
+          paneKey: 'tab1:pane-2',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: '66666666-7777-4888-8999-000000000000' },
+          prompt: 'continue',
+          state: 'done',
+          capturedAt: 10,
+          updatedAt: 9,
+          launchKind: 'claude-agent-teams',
+          origin: 'quit'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const records = result.value.sleepingAgentSessionsByPaneKey
+      expect(records?.['tab1:pane-1']).toBeUndefined()
+      expect(records?.['tab1:pane-2']?.launchKind).toBe('claude-agent-teams')
+    }
+  })
+
   it('preserves interrupted sleeping agent records across hydration', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

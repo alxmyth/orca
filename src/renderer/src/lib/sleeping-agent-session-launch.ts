@@ -5,7 +5,9 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import {
   resolveAgentResumeLaunchTarget,
-  type AgentResumeLaunchTarget
+  resolveAgentResumeRuntimeFacts,
+  type AgentResumeLaunchTarget,
+  type AgentResumeRuntimeFacts
 } from '@/lib/agent-resume-launch-target'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -28,18 +30,24 @@ export type ResumeSleepingAgentSessionsOptions = {
   onSessionLaunched?: (tabId: string) => void
 }
 
-function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
+function getResumeLaunchTarget(
+  worktreeId: string
+): AgentResumeLaunchTarget & AgentResumeRuntimeFacts {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
   // The resume tab is created without a shell override, so the global Windows shell wins.
-  return resolveAgentResumeLaunchTarget({
+  const targetArgs = {
     projectRuntime: getLocalProjectExecutionRuntimeContext(state, worktreeId),
     connectionId: repo?.connectionId,
     executionHostId: getExecutionHostIdForWorktree(state, worktreeId),
     worktreePath: worktree?.path,
     terminalWindowsShell: state.settings?.terminalWindowsShell
-  })
+  }
+  return {
+    ...resolveAgentResumeLaunchTarget(targetArgs),
+    ...resolveAgentResumeRuntimeFacts(targetArgs)
+  }
 }
 
 function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
@@ -86,7 +94,10 @@ export function launchSleepingAgentSession(
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
     platform: resumeTarget.platform,
-    shell: resumeTarget.shell
+    shell: resumeTarget.shell,
+    isRemote: resumeTarget.isRemote,
+    isWsl: resumeTarget.isWsl,
+    ...(record.launchKind ? { launchKind: record.launchKind } : {})
   })
   if (!startupPlan) {
     toast.error(
@@ -99,7 +110,11 @@ export function launchSleepingAgentSession(
   }
 
   const tab = state.createTab(record.worktreeId, undefined, undefined, {
-    launchAgent: record.agent,
+    // Why: the tab's launch identity drives the agent logo, so a teams leader must
+    // come back as teams. The sibling `launchAgent` values below stay `record.agent`
+    // ('claude') on purpose: they key startup delivery and the provider-session
+    // claim, which track the real process rather than the launch mode.
+    launchAgent: record.launchKind ?? record.agent,
     pendingStartup: {
       command: startupPlan.launchCommand,
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
