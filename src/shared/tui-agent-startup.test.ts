@@ -465,6 +465,101 @@ describe('tui agent startup plans', () => {
     })
   })
 
+  it('rebuilds an Agent Teams leader through the Orca wrapper', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'darwin',
+      launchKind: 'claude-agent-teams'
+    })
+
+    expect(plan?.launchCommand).toBe("orca claude-teams '--resume' 's1'")
+  })
+
+  it('uses the Linux orca-ide wrapper for a local Agent Teams resume', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'linux',
+      launchKind: 'claude-agent-teams'
+    })
+
+    expect(plan?.launchCommand).toBe("orca-ide claude-teams '--resume' 's1'")
+  })
+
+  it('uses the plain orca shim for an Agent Teams resume on a Linux SSH remote', () => {
+    // Why: the relay deploys the shim as `orca` and rejects `orca-ide claude-teams`
+    // (issue #6500), so a remote resume must not emit the local-only name.
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'linux',
+      isRemote: true,
+      launchKind: 'claude-agent-teams'
+    })
+
+    expect(plan?.launchCommand).toBe("orca claude-teams '--resume' 's1'")
+  })
+
+  it('resumes an Agent Teams record as plain claude on Windows', () => {
+    // Why: Windows uses Claude's in-process teams fallback, not the Orca wrapper.
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'win32',
+      launchKind: 'claude-agent-teams'
+    })
+
+    expect(plan?.launchCommand).toBe("claude '--resume' 's1'")
+  })
+
+  it('resumes an Agent Teams record as plain claude under WSL', () => {
+    // Why: WSL reports platform 'linux' but is a teams-unsupported runtime, so the
+    // wrapper must be suppressed by the runtime signal rather than by platform.
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'linux',
+      isWsl: true,
+      launchKind: 'claude-agent-teams'
+    })
+
+    expect(plan?.launchCommand).toBe("claude '--resume' 's1'")
+  })
+
+  it('prefers the teams wrapper over a captured plain claude command', () => {
+    // Why: after one cold restore the pane re-registers a plain `claude`
+    // agentCommand under a now-matching identity; if that won, the team would be
+    // dropped from the second restart onward.
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      agentCommand: 'claude',
+      platform: 'darwin',
+      launchKind: 'claude-agent-teams'
+    })
+
+    expect(plan?.launchCommand).toBe("orca claude-teams '--resume' 's1'")
+  })
+
+  it('keeps a claude command override out of the teams wrapper', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: { claude: 'claude --dangerously-skip-permissions' },
+      platform: 'darwin',
+      launchKind: 'claude-agent-teams'
+    })
+
+    expect(plan?.launchCommand).toBe("orca claude-teams '--resume' 's1'")
+  })
+
   it('appends shell-quoted CLI arguments before prompt delivery flags', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',
