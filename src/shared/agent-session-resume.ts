@@ -57,6 +57,11 @@ export type SleepingAgentSessionRecord = {
   interrupted?: boolean
   connectionId?: string | null
   launchConfig?: SleepingAgentLaunchConfig
+  /** Orca launch mode the pane was started in, when it differs from `agent`. An
+   *  Agent Teams leader is a real `claude` process, so `agent` stays 'claude'
+   *  and older builds resume it as plain claude; only builds that know this
+   *  marker rebuild the team. Kept out of the `agent` enum for that reason. */
+  launchKind?: 'claude-agent-teams'
   /** How the record was captured. Worktree-sleep records (legacy records have
    *  no origin) are consumed by worktree activation, which opens a fresh tab.
    *  Quit/live records describe panes that still exist in the restored session,
