@@ -1,7 +1,10 @@
 import { useAppStore } from '@/store'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
-import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
+import {
+  resolveAgentResumeLaunchTarget,
+  resolveAgentResumeRuntimeFacts
+} from '@/lib/agent-resume-launch-target'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -51,14 +54,16 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       matchingSleepingLaunchConfig
     // Why: the resume line is typed into this pane's live shell, so its quoting must
     // follow the tab's effective Windows shell, not the win32 PowerShell default.
-    const resumeTarget = resolveAgentResumeLaunchTarget({
+    const resumeTargetArgs = {
       projectRuntime: session.projectRuntime,
       connectionId: session.connectionId,
       executionHostId: session.executionHostId,
       worktreePath: session.worktree?.path,
       terminalWindowsShell: state.settings?.terminalWindowsShell,
       tabShellOverride: session.shellOverride
-    })
+    }
+    const resumeTarget = resolveAgentResumeLaunchTarget(resumeTargetArgs)
+    const runtimeFacts = resolveAgentResumeRuntimeFacts(resumeTargetArgs)
     const startupPlan = buildAgentResumeStartupPlan({
       agent,
       providerSession,
@@ -76,7 +81,10 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
         ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
         : {}),
       platform: resumeTarget.platform,
-      shell: resumeTarget.shell
+      shell: resumeTarget.shell,
+      isRemote: runtimeFacts.isRemote,
+      isWsl: runtimeFacts.isWsl,
+      ...(sleepingRecord?.launchKind ? { launchKind: sleepingRecord.launchKind } : {})
     })
     if (!startupPlan) {
       return null

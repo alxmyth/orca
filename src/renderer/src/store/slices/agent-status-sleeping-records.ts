@@ -58,6 +58,11 @@ export function sleepingRecordFromEntry(args: {
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
       : {}),
     ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
+    // Why: the Claude hook reports a teams leader as plain 'claude', so the tab's
+    // launch identity is the only surviving record of the teams launch mode.
+    ...(tab?.launchAgent === 'claude-agent-teams'
+      ? { launchKind: 'claude-agent-teams' as const }
+      : {}),
     ...(args.entry.interrupted ? { interrupted: true } : {}),
     ...(args.origin ? { origin: args.origin } : {})
   }
