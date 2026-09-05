@@ -12,6 +12,13 @@ export type AgentResumeLaunchTarget = {
   shell: AgentStartupShell | undefined
 }
 
+/** WSL and SSH both collapse to `platform: 'linux'`, so a launch mode gated on the
+ *  real runtime (Agent Teams) needs them reported separately from the target. */
+export type AgentResumeRuntimeFacts = {
+  isWsl: boolean
+  isRemote: boolean
+}
+
 export type AgentResumeLaunchTargetArgs = {
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
   /** SSH connection owning the workspace, if any. */
@@ -22,6 +29,24 @@ export type AgentResumeLaunchTargetArgs = {
   terminalWindowsShell: string | null | undefined
   /** Per-tab Windows shell override, which beats the global setting at spawn time. */
   tabShellOverride?: string | null
+}
+
+// Why: an SSH workspace also reports 'linux', so remoteness alone cannot stand in
+// for WSL; only the project runtime or a WSL UNC worktree path proves it.
+export function resolveAgentResumeRuntimeFacts(
+  args: AgentResumeLaunchTargetArgs
+): AgentResumeRuntimeFacts {
+  const isWsl =
+    args.projectRuntime?.status === 'repair-required'
+      ? args.projectRuntime.repair.preferredRuntime.kind === 'wsl'
+      : args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl'
+        ? true
+        : Boolean(args.worktreePath && isWslUncPath(args.worktreePath))
+  return {
+    isWsl,
+    isRemote:
+      Boolean(args.connectionId) || parseExecutionHostId(args.executionHostId)?.kind !== 'local'
+  }
 }
 
 function resolveResumeLaunchPlatform(args: AgentResumeLaunchTargetArgs): NodeJS.Platform {
@@ -51,8 +76,7 @@ export function resolveAgentResumeLaunchTarget(
     platform,
     shell: resolveLocalWindowsAgentStartupShell({
       platform,
-      isRemote:
-        Boolean(args.connectionId) || parseExecutionHostId(args.executionHostId)?.kind !== 'local',
+      isRemote: resolveAgentResumeRuntimeFacts(args).isRemote,
       terminalWindowsShell: resolveWindowsShellOverride(
         args.tabShellOverride,
         args.terminalWindowsShell
